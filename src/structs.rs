@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -5,7 +7,7 @@ pub struct Repo {
     id: u8,
     owner: User,
     name: String,
-    full_name: String,
+    pub full_name: String,
     description: String,
     empty: bool,
     private: bool,

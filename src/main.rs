@@ -1,9 +1,14 @@
 #![feature(iter_advance_by)]
 mod structs;
 
+use std::{collections::HashMap, ops::Add};
+
+use colored::Colorize;
 use hickory_resolver::proto::rr::rdata::svcb::SvcParamKey;
+use piechart::{Color, Data};
+use rand::{random, seq::IndexedRandom};
 use reqwest::Client;
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use structs::Repo;
 use url::Url;
 
@@ -24,17 +29,69 @@ fn main() {
     if let Some(o) = rt.block_on(check_dns(&url)) {
         url = o;
     }
-    let quota = rt.block_on(forgejo(auth, url));
-    println!("{:?}", quota)
+    let res = rt.block_on(forgejo(auth, url)).unwrap();
+    make_chart(res);
 }
 
-async fn forgejo(auth: String, url: Url) -> Result<Vec<Repo>, reqwest::Error> {
+fn make_chart(data: HashMap<String, u64>) {
+    let mut chart_data = vec![];
+    let possible_chars = vec!['•', '▪', '▴'];
+    for (k, v) in data {
+        let mut rng = rand::rng();
+        chart_data.push(Data {
+            label: k,
+            value: v as f32,
+            color: Some(Color::Fixed(random()).into()),
+            fill: possible_chars.choose(&mut rng).unwrap().clone(),
+        })
+    }
+    piechart::Chart::new()
+        .radius(9)
+        .aspect_ratio(3)
+        .legend(true)
+        .draw(&chart_data);
+}
+
+async fn forgejo(auth: String, url: Url) -> Result<HashMap<String, u64>, reqwest::Error> {
+    println!("Receiving repositories...");
     let repos: Vec<Repo> = reqwest(
         &auth,
         url.clone().join("user/repos?page=1&limit=-1").unwrap(),
     )
     .await?;
-    Ok(repos)
+    println!("{}", "Repositories received!".bright_green());
+    let mut lang_map: HashMap<String, u64> = HashMap::new();
+    println!("Receiving repository languages...");
+    for repo in repos {
+        let languages: serde_json::Value = reqwest(
+            &auth,
+            url.clone()
+                .join(&format!("repos/{}/languages", repo.full_name))
+                .unwrap(),
+        )
+        .await?;
+        match languages.as_object() {
+            Some(o) => {
+                for (lang, freq) in o.iter() {
+                    let lang = lang.as_str().to_string();
+                    let freq = freq.as_u64().unwrap_or(0);
+                    if freq == 0 {
+                        println!("{}{}{}{}", "Could not parse ".red(), freq, " for ".red(), lang)
+                    }
+                    if lang_map.contains_key(&lang) {
+                        if let Some(e) = lang_map.get_mut(&lang) {
+                            *e = e.add(freq);
+                        }
+                    } else {
+                        lang_map.insert(lang, freq);
+                    }
+                }
+            }
+            None => continue,
+        }
+    }
+    println!("{}", "Ok! Building chart...".bright_green());
+    Ok(lang_map)
 }
 
 async fn reqwest<U>(auth: &str, url: Url) -> Result<U, reqwest::Error>
@@ -52,7 +109,6 @@ where
 }
 
 async fn check_dns(url: &Url) -> Option<Url> {
-    println!("{}", url);
     let dom = url.domain()?;
     let resolv = hickory_resolver::TokioAsyncResolver::tokio_from_system_conf().ok()?;
     let res = resolv
@@ -68,8 +124,9 @@ async fn check_dns(url: &Url) -> Option<Url> {
         if key == &SvcParamKey::Port {
             let mut url = url.clone();
             url.set_port(param.clone().into_port().ok()).ok()?;
+            println!("Provided URL resolved to {}", url.to_string().yellow());
             return Some(url.clone());
         }
     }
-    Some(url.clone())
+    None
 }
