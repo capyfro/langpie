@@ -1,3 +1,13 @@
 # lang-pie
 
-View a pie chart of your most commonly used languages on Forgejo
+Creates a pie chart on `stdout` of the ratio of languages in your Forgejo account.
+
+## Usage
+
+```shell
+$ langpie
+```
+
+## License
+
+[MIT](https://choosealicense.com/licenses/mit/)
