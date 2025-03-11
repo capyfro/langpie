@@ -4,7 +4,6 @@ mod structs;
 use std::{collections::HashMap, ops::Add};
 
 use colored::Colorize;
-use hickory_resolver::proto::rr::rdata::svcb::SvcParamKey;
 use piechart::{Color, Data};
 use rand::{random, seq::IndexedRandom};
 use reqwest::Client;
@@ -26,7 +25,7 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
-    if let Some(o) = rt.block_on(check_dns(&url)) {
+    if let Ok(o) = rt.block_on(portify::resolve_svcb(&url)) {
         url = o;
     }
     let res = rt.block_on(forgejo(auth, url)).unwrap();
@@ -76,7 +75,13 @@ async fn forgejo(auth: String, url: Url) -> Result<HashMap<String, u64>, reqwest
                     let lang = lang.as_str().to_string();
                     let freq = freq.as_u64().unwrap_or(0);
                     if freq == 0 {
-                        println!("{}{}{}{}", "Could not parse ".red(), freq, " for ".red(), lang)
+                        println!(
+                            "{}{}{}{}",
+                            "Could not parse ".red(),
+                            freq,
+                            " for ".red(),
+                            lang
+                        )
                     }
                     if lang_map.contains_key(&lang) {
                         if let Some(e) = lang_map.get_mut(&lang) {
@@ -106,27 +111,4 @@ where
         .send()
         .await?;
     Ok(req.json().await?)
-}
-
-async fn check_dns(url: &Url) -> Option<Url> {
-    let dom = url.domain()?;
-    let resolv = hickory_resolver::TokioAsyncResolver::tokio_from_system_conf().ok()?;
-    let res = resolv
-        .lookup(dom, hickory_resolver::proto::rr::RecordType::HTTPS)
-        .await
-        .ok()?;
-    let rec = res
-        .record_iter()
-        .filter(|x| x.name().to_string().eq(&format!("{}.", dom)))
-        .next()?;
-    let rdata = rec.clone().into_data()?.into_https().ok()?;
-    for (key, param) in rdata.0.svc_params() {
-        if key == &SvcParamKey::Port {
-            let mut url = url.clone();
-            url.set_port(param.clone().into_port().ok()).ok()?;
-            println!("Provided URL resolved to {}", url.to_string().yellow());
-            return Some(url.clone());
-        }
-    }
-    None
 }
