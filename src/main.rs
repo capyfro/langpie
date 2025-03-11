@@ -33,13 +33,15 @@ fn main() {
 }
 
 fn make_chart(data: HashMap<String, u64>) {
+    let mut data_vec: Vec<(&String, &u64)> = data.iter().collect();
+    data_vec.sort_by(|k, v| v.1.cmp(k.1));
     let mut chart_data = vec![];
     let possible_chars = vec!['•', '▪', '▴'];
-    for (k, v) in data {
+    for (k, v) in data_vec {
         let mut rng = rand::rng();
         chart_data.push(Data {
-            label: k,
-            value: v as f32,
+            label: k.to_string(),
+            value: *v as f32,
             color: Some(Color::Fixed(random()).into()),
             fill: possible_chars.choose(&mut rng).unwrap().clone(),
         })
