@@ -1,14 +1,14 @@
-#![allow(unused)]
+
 
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct Repo {
-    id: u8,
+    /*id: u8,
     owner: User,
-    name: String,
+    name: String,*/
     pub full_name: String,
-    description: String,
+    /*description: String,
     empty: bool,
     private: bool,
     fork: bool,
@@ -64,9 +64,9 @@ pub struct Repo {
     object_format_name: String,
     mirror_updated: String,
     repo_transfer: Option<String>,
-    topics: Option<Vec<String>>,
+    topics: Option<Vec<String>>,*/
 }
-
+/*
 #[derive(Deserialize, Debug)]
 struct User {
     id: u8,
@@ -108,3 +108,4 @@ struct Tracker {
     allow_only_contributors_to_track_time: bool,
     enable_issue_dependencies: bool,
 }
+*/

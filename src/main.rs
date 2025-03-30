@@ -4,6 +4,7 @@ mod structs;
 use std::{collections::HashMap, ops::Add};
 
 use colored::Colorize;
+use keyring::Entry;
 use piechart::{Color, Data};
 use rand::{random, seq::IndexedRandom};
 use reqwest::Client;
@@ -12,15 +13,19 @@ use structs::Repo;
 use url::Url;
 
 fn main() {
-    let auth = format!(
-        "token {}",
-        std::env::var("FORGEJO_AUTH_LANG_PIE")
-            .expect("Forgejo authentication must be provided in $FORGEJO_AUTH_LANG_PIE")
-    );
     let mut url = Url::parse(
         &std::env::var("FORGEJO_URL").expect("Forgejo URL must be provided in $FORGEJO_URL"),
     )
     .expect("Could not parse FORGEJO_URL");
+    let user = whoami::username();
+    let token = match get_token(&url, &user).map(String::from_utf8) {
+        Ok(Ok(t)) => t,
+        _ => {
+            println!("Could not get Forgejo authentication from keyring");
+            set_token(&url, user, std::env::var("FORGEJO_AUTH_LANG_PIE").unwrap()).unwrap()
+        }
+    };
+    let auth = format!("token {token}");
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -113,4 +118,20 @@ where
         .send()
         .await?;
     Ok(req.json().await?)
+}
+
+fn set_token(
+    url: impl AsRef<str>,
+    user: impl AsRef<str>,
+    token: impl AsRef<str>,
+) -> keyring::error::Result<String> {
+    let entry = Entry::new(url.as_ref(), user.as_ref())?;
+    let token = token.as_ref();
+    entry.set_secret(token.as_bytes())?;
+    Ok(token.to_string())
+}
+
+fn get_token(url: impl AsRef<str>, user: impl AsRef<str>) -> keyring::error::Result<Vec<u8>> {
+    let entry = Entry::new(url.as_ref(), user.as_ref())?;
+    Ok(entry.get_secret()?)
 }
