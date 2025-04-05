@@ -45,7 +45,7 @@ fn make_chart(data: HashMap<String, u128>) {
         let mut rng = rand::rng();
         chart_data.push(Data {
             label: k.to_string(),
-            value: *v as f32,
+            value: *v as f32 / 10000.0,
             color: Some(Color::Fixed(random()).into()),
             fill: possible_chars.choose(&mut rng).unwrap().clone(),
         })
@@ -81,7 +81,7 @@ async fn forgejo(auth: String, url: Url) -> Result<HashMap<String, u128>, reqwes
                     let lang = lang.as_str().to_string();
                     let freq = match freq.as_number().map(|x| x.as_u128()) {
                         Some(Some(n)) => n,
-                        _ => 0
+                        _ => 0,
                     };
                     if freq == 0 {
                         println!(
