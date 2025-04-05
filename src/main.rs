@@ -1,4 +1,3 @@
-#![feature(iter_advance_by)]
 mod structs;
 
 use std::{collections::HashMap, ops::Add};
@@ -37,8 +36,8 @@ fn main() {
     make_chart(res);
 }
 
-fn make_chart(data: HashMap<String, u64>) {
-    let mut data_vec: Vec<(&String, &u64)> = data.iter().collect();
+fn make_chart(data: HashMap<String, u128>) {
+    let mut data_vec: Vec<(&String, &u128)> = data.iter().collect();
     data_vec.sort_by(|k, v| v.1.cmp(k.1));
     let mut chart_data = vec![];
     let possible_chars = vec!['•', '▪', '▴'];
@@ -58,7 +57,7 @@ fn make_chart(data: HashMap<String, u64>) {
         .draw(&chart_data);
 }
 
-async fn forgejo(auth: String, url: Url) -> Result<HashMap<String, u64>, reqwest::Error> {
+async fn forgejo(auth: String, url: Url) -> Result<HashMap<String, u128>, reqwest::Error> {
     println!("Receiving repositories...");
     let repos: Vec<Repo> = reqwest(
         &auth,
@@ -66,7 +65,7 @@ async fn forgejo(auth: String, url: Url) -> Result<HashMap<String, u64>, reqwest
     )
     .await?;
     println!("{}", "Repositories received!".bright_green());
-    let mut lang_map: HashMap<String, u64> = HashMap::new();
+    let mut lang_map: HashMap<String, u128> = HashMap::new();
     println!("Receiving repository languages...");
     for repo in repos {
         let languages: serde_json::Value = reqwest(
@@ -80,7 +79,10 @@ async fn forgejo(auth: String, url: Url) -> Result<HashMap<String, u64>, reqwest
             Some(o) => {
                 for (lang, freq) in o.iter() {
                     let lang = lang.as_str().to_string();
-                    let freq = freq.as_u64().unwrap_or(0);
+                    let freq = match freq.as_number().map(|x| x.as_u128()) {
+                        Some(Some(n)) => n,
+                        _ => 0
+                    };
                     if freq == 0 {
                         println!(
                             "{}{}{}{}",
