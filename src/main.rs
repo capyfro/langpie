@@ -1,14 +1,16 @@
+mod pass;
 mod structs;
+mod token;
 
 use std::{collections::HashMap, ops::Add};
 
 use colored::Colorize;
-use keyring::Entry;
 use piechart::{Color, Data};
 use rand::{random, seq::IndexedRandom};
 use reqwest::Client;
 use serde::de::DeserializeOwned;
 use structs::Repo;
+use token::{Manager, get_token, set_token};
 use url::Url;
 
 fn main() {
@@ -16,12 +18,36 @@ fn main() {
         &std::env::var("FORGEJO_URL").expect("Forgejo URL must be provided in $FORGEJO_URL"),
     )
     .expect("Could not parse FORGEJO_URL");
+    let mgr = std::env::args().last().expect("No argument provided");
+    let mgr = match mgr.as_str() {
+        "libsecret" => Manager::Libsecret {},
+        "gopass" => Manager::Gopass {
+            path: pass::gopass_conf(),
+        },
+        _ => panic!("Argument should be one of 'libsecret', 'gopass'"),
+    };
     let user = whoami::username();
-    let token = match get_token(&url, &user).map(String::from_utf8) {
+    let token = match get_token(
+        &mgr,
+        &url.host_str().unwrap_or_else(|| &url.as_str()),
+        &user,
+    )
+    .map(String::from_utf8)
+    {
         Ok(Ok(t)) => t,
         _ => {
             println!("Could not get Forgejo authentication from keyring");
-            set_token(&url, user, std::env::var("FORGEJO_AUTH_LANG_PIE").unwrap()).unwrap()
+            let token = std::env::var("FORGEJO_AUTH_LANG_PIE").unwrap();
+            match set_token(
+                &mgr,
+                &url.host_str().unwrap_or_else(|| &url.as_str()),
+                user,
+                &token,
+            ) {
+                Ok(_) => (),
+                Err(e) => println!("Error saving token: {}", e),
+            }
+            token
         }
     };
     let auth = format!("token {token}");
@@ -120,20 +146,4 @@ where
         .send()
         .await?;
     Ok(req.json().await?)
-}
-
-fn set_token(
-    url: impl AsRef<str>,
-    user: impl AsRef<str>,
-    token: impl AsRef<str>,
-) -> keyring::error::Result<String> {
-    let entry = Entry::new(url.as_ref(), user.as_ref())?;
-    let token = token.as_ref();
-    entry.set_secret(token.as_bytes())?;
-    Ok(token.to_string())
-}
-
-fn get_token(url: impl AsRef<str>, user: impl AsRef<str>) -> keyring::error::Result<Vec<u8>> {
-    let entry = Entry::new(url.as_ref(), user.as_ref())?;
-    Ok(entry.get_secret()?)
 }
